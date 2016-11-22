@@ -272,7 +272,7 @@ int main(int argc, char **argv) {
 	}
 
 	/* setup RAND */
-	OQS_RAND *rand = OQS_RAND_new(OQS_RAND_alg_urandom_chacha20);
+	OQS_RAND *rand = OQS_RAND_new(OQS_RAND_alg_urandom_aesctr);
 	if (rand == NULL) {
 		goto err;
 	}

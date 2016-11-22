@@ -9,37 +9,26 @@ typedef struct {
 } poly __attribute__((aligned(32)));
 #endif
 
+#define QINV 12287 // -inverse_mod(p,2^18)
+#define RLOG 18
 
-static const uint32_t qinv = 12287; // -inverse_mod(p,2^18)
-static const uint32_t rlog = 18;
+#define MONT_REDUCE(a) ((a + ((a*QINV) & 262143)*PARAM_Q) >> RLOG)
 
 static uint16_t montgomery_reduce(uint32_t a) {
-	uint32_t u;
-
-	u = (a * qinv);
-	u &= ((1 << rlog) - 1);
-	u *= PARAM_Q;
-	a = a + u;
-	return a >> 18;
+	a += ((a * QINV) & 262143) * PARAM_Q;
+	return a >> RLOG;
 }
 
-static uint16_t barrett_reduce(uint16_t a) {
-	uint32_t u;
-
-	u = ((uint32_t) a * 5) >> 16;
-	u *= PARAM_Q;
-	a -= u;
+static uint16_t barrett_reduce(uint32_t a) {
+	a -= ((a * 5) >> 16) * PARAM_Q;
 	return a;
 }
 
 static void bitrev_vector(uint16_t *poly) {
-	unsigned int i, r;
-	uint16_t tmp;
-
-	for (i = 0; i < PARAM_N; i++) {
-		r = bitrev_table[i];
+	for (int i = 0; i < PARAM_N; i++) {
+		uint16_t r = bitrev_table[i];
 		if (i < r) {
-			tmp = poly[i];
+			uint16_t tmp = poly[i];
 			poly[i] = poly[r];
 			poly[r] = tmp;
 		}
@@ -47,52 +36,51 @@ static void bitrev_vector(uint16_t *poly) {
 }
 
 static void mul_coefficients(uint16_t *poly, const uint16_t *factors) {
-	unsigned int i;
-
-	for (i = 0; i < PARAM_N; i++) {
-		poly[i] = montgomery_reduce((poly[i] * factors[i]));
+	for (int i = 0; i < PARAM_N; i++) {
+		uint32_t val = poly[i] * factors[i];
+		poly[i] = montgomery_reduce(val);
 	}
 }
 
+#define NTT_A(DIST) \
+    for (int start = 0; start < DIST; start++) { \
+        for (int j = start, jTwiddle = 0; j < PARAM_N - 1; j += 2 * DIST, jTwiddle++) { \
+				a[j] += a[j + DIST]; \
+				a[j + DIST] = montgomery_reduce(omega[jTwiddle] * (a[j] + 3 * PARAM_Q - 2*a[j + DIST])); \
+		} \
+	}
+
+#define NTT_B(DIST) \
+    for (int start = 0; start < DIST; start++) { \
+		for (int j = start, jTwiddle = 0; j < PARAM_N - 1; j += 2 * DIST, jTwiddle++) { \
+			uint32_t temp = a[j]; \
+			a[j] = barrett_reduce(temp + a[j + DIST]); \
+			a[j + DIST] = montgomery_reduce(omega[jTwiddle] * (temp + 3 * PARAM_Q - a[j + DIST])); \
+		} \
+	}
 
 
 /* GS_bo_to_no; omegas need to be in Montgomery domain */
 static void ntt(uint16_t *a, const uint16_t *omega) {
-	int i, start, j, jTwiddle, distance;
-	uint16_t temp, W;
+	NTT_A(1)
+	NTT_B(2)
 
+	NTT_A(4)
+	NTT_B(8)
 
-	for (i = 0; i < 10; i += 2) {
-		// Even level
-		distance = (1 << i);
-		for (start = 0; start < distance; start++) {
-			jTwiddle = 0;
-			for (j = start; j < PARAM_N - 1; j += 2 * distance) {
-				W = omega[jTwiddle++];
-				temp = a[j];
-				a[j] = (temp + a[j + distance]); // Omit reduction (be lazy)
-				a[j + distance] = montgomery_reduce((W * ((uint32_t)temp + 3 * PARAM_Q - a[j + distance])));
-			}
-		}
+	NTT_A(16)
+	NTT_B(32)
 
-		// Odd level
-		distance <<= 1;
-		for (start = 0; start < distance; start++) {
-			jTwiddle = 0;
-			for (j = start; j < PARAM_N - 1; j += 2 * distance) {
-				W = omega[jTwiddle++];
-				temp = a[j];
-				a[j] = barrett_reduce((temp + a[j + distance]));
-				a[j + distance] = montgomery_reduce((W * ((uint32_t)temp + 3 * PARAM_Q - a[j + distance])));
-			}
-		}
-	}
+	NTT_A(64)
+	NTT_B(128)
+
+	NTT_A(256)
+	NTT_B(512)
 }
 
 static void poly_frombytes(poly *r, const unsigned char *a) {
-	int i;
-	for (i = 0; i < PARAM_N / 4; i++) {
-		r->coeffs[4 * i + 0] =                               a[7 * i + 0]        | (((uint16_t)a[7 * i + 1] & 0x3f) << 8);
+	for (int i = 0; i < PARAM_N / 4; i++) {
+		r->coeffs[4 * i + 0] =                                   a[7 * i + 0]        | (((uint16_t)a[7 * i + 1] & 0x3f) << 8);
 		r->coeffs[4 * i + 1] = (a[7 * i + 1] >> 6) | (((uint16_t)a[7 * i + 2]) << 2) | (((uint16_t)a[7 * i + 3] & 0x0f) << 10);
 		r->coeffs[4 * i + 2] = (a[7 * i + 3] >> 4) | (((uint16_t)a[7 * i + 4]) << 4) | (((uint16_t)a[7 * i + 5] & 0x03) << 12);
 		r->coeffs[4 * i + 3] = (a[7 * i + 5] >> 2) | (((uint16_t)a[7 * i + 6]) << 6);
@@ -100,10 +88,9 @@ static void poly_frombytes(poly *r, const unsigned char *a) {
 }
 
 static void poly_tobytes(unsigned char *r, const poly *p) {
-	int i;
 	uint16_t t0, t1, t2, t3, m;
 	int16_t c;
-	for (i = 0; i < PARAM_N / 4; i++) {
+	for (int i = 0; i < PARAM_N / 4; i++) {
 		t0 = barrett_reduce(p->coeffs[4 * i + 0]); //Make sure that coefficients have only 14 bits
 		t1 = barrett_reduce(p->coeffs[4 * i + 1]);
 		t2 = barrett_reduce(p->coeffs[4 * i + 2]);
@@ -164,7 +151,6 @@ static void poly_uniform(poly *a, const unsigned char *seed) {
 	}
 }
 
-
 static void poly_getnoise(poly *r, OQS_RAND *rand) {
 #if PARAM_K != 16
 #error "poly_getnoise in poly.c only supports k=16"
@@ -172,16 +158,15 @@ static void poly_getnoise(poly *r, OQS_RAND *rand) {
 
 	unsigned char buf[4 * PARAM_N];
 	uint32_t *tp, t, d, a, b;
-	int i, j;
 
 	tp = (uint32_t *) buf;
 
 	rand->rand_n(rand, buf, 4 * PARAM_N);
 
-	for (i = 0; i < PARAM_N; i++) {
+	for (int i = 0; i < PARAM_N; i++) {
 		t = tp[i];
 		d = 0;
-		for (j = 0; j < 8; j++) {
+		for (int j = 0; j < 8; j++) {
 			d += (t >> j) & 0x01010101;
 		}
 		a = ((d >> 8) & 0xff) + (d & 0xff);
@@ -191,17 +176,14 @@ static void poly_getnoise(poly *r, OQS_RAND *rand) {
 }
 
 static void poly_pointwise(poly *r, const poly *a, const poly *b) {
-	int i;
-	uint16_t t;
-	for (i = 0; i < PARAM_N; i++) {
-		t       = montgomery_reduce(3186 * b->coeffs[i]); /* t is now in Montgomery domain */
+	for (int i = 0; i < PARAM_N; i++) {
+		uint16_t t   = montgomery_reduce(3186 * b->coeffs[i]); /* t is now in Montgomery domain */
 		r->coeffs[i] = montgomery_reduce(a->coeffs[i] * t); /* r->coeffs[i] is back in normal domain */
 	}
 }
 
 static void poly_add(poly *r, const poly *a, const poly *b) {
-	int i;
-	for (i = 0; i < PARAM_N; i++) {
+	for (int i = 0; i < PARAM_N; i++) {
 		r->coeffs[i] = barrett_reduce(a->coeffs[i] + b->coeffs[i]);
 	}
 }
@@ -286,11 +268,10 @@ static void helprec(poly *c, const poly *v, OQS_RAND *oqs_rand) {
 	int32_t v0[4], v1[4], v_tmp[4], k;
 	unsigned char rbit;
 	unsigned char rand[32];
-	int i;
 
 	oqs_rand->rand_n(oqs_rand, rand, 32);
 
-	for (i = 0; i < 256; i++) {
+	for (int i = 0; i < 256; i++) {
 		rbit = (rand[i >> 3] >> (i & 7)) & 1;
 
 		k  = f(v0 + 0, v1 + 0, 8 * v->coeffs[  0 + i] + 4 * rbit);
@@ -314,14 +295,12 @@ static void helprec(poly *c, const poly *v, OQS_RAND *oqs_rand) {
 
 
 static void rec(unsigned char *key, const poly *v, const poly *c) {
-	int i;
-	int32_t tmp[4];
-
-	for (i = 0; i < 32; i++) {
+	for (int i = 0; i < 32; i++) {
 		key[i] = 0;
 	}
 
-	for (i = 0; i < 256; i++) {
+	for (int i = 0; i < 256; i++) {
+		int32_t tmp[4];
 		tmp[0] = 16 * PARAM_Q + 8 * (int32_t)v->coeffs[  0 + i] - PARAM_Q * (2 * c->coeffs[  0 + i] + c->coeffs[768 + i]);
 		tmp[1] = 16 * PARAM_Q + 8 * (int32_t)v->coeffs[256 + i] - PARAM_Q * (2 * c->coeffs[256 + i] + c->coeffs[768 + i]);
 		tmp[2] = 16 * PARAM_Q + 8 * (int32_t)v->coeffs[512 + i] - PARAM_Q * (2 * c->coeffs[512 + i] + c->coeffs[768 + i]);
