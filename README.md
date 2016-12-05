@@ -94,6 +94,8 @@ Since our initial launch, we have made the following updates:
 - `kex_rlwe_newhope` wrapper
 - `kex_rlwe_msrln16` implementation contributed by Christian Paquin (Microsoft Research)
 - `kex_sidh_cln16` implementation contributed by Christian Paquin (Microsoft Research)
+- `kex_code_mcbits` wrapper
+- `kex_code_qcbits` wrapper
 
 Our plans for the next few months can be found in [Milestone 1 - Key exchange](https://github.com/open-quantum-safe/liboqs/projects/2).
 
@@ -111,6 +113,8 @@ liboqs is licensed under the MIT License; see [LICENSE.txt](https://github.com/o
 - `src/kex_rlwe_newhope`: public domain
 - `src/kex_sidh_cln16`: MIT License
 - `src/rand_urandom_chacha20/external`: public domain
+- `src/kex_code_mcbits`: public domain
+- `src/kex_code_qcbits`: public domain
 
 Team
 ----
