@@ -7,6 +7,7 @@
 #include <oqs/kex_lwe_frodo.h>
 #include <oqs/kex_sidh_cln16.h>
 #include <oqs/kex_code_mcbits.h>
+#include <oqs/kex_code_qcbits.h>
 
 OQS_KEX *OQS_KEX_new(OQS_RAND *rand, enum OQS_KEX_alg_name alg_name, const uint8_t *seed, const size_t seed_len, const char *named_parameters) {
 	switch (alg_name) {
@@ -24,6 +25,8 @@ OQS_KEX *OQS_KEX_new(OQS_RAND *rand, enum OQS_KEX_alg_name alg_name, const uint8
 		return OQS_KEX_sidh_cln16_new(rand);
 	case OQS_KEX_alg_code_mcbits:
 		return OQS_KEX_code_mcbits_new(rand);
+	case OQS_KEX_alg_code_qcbits:
+		return OQS_KEX_code_qcbits_new(rand);
 	default:
 		assert(0);
 		return NULL;

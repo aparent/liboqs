@@ -61,6 +61,7 @@ links:
 	$(LN) ../../src/kex_rlwe_newhope/kex_rlwe_newhope.h include/oqs
 	$(LN) ../../src/kex_rlwe_msrln16/kex_rlwe_msrln16.h include/oqs
 	$(LN) ../../src/kex_code_mcbits/kex_code_mcbits.h include/oqs
+	$(LN) ../../src/kex_code_qcbits/kex_code_qcbits.h include/oqs
 	$(LN) ../../src/kex_lwe_frodo/kex_lwe_frodo.h include/oqs
 	$(LN) ../../src/kex_sidh_cln16/kex_sidh_cln16.h include/oqs
 	$(LN) ../../src/crypto/rand/rand.h include/oqs
@@ -112,6 +113,15 @@ KEX_CODE_MCBITS_HEADERS := $(wildcard src/kex_code_mcbits/external/*.h)
 KEX_CODE_MCBITS_HEADERS += $(wildcard src/kex_code_mcbits/*.h)
 $(KEX_CODE_MCBITS_OBJS): $(KEX_CODE_MCBITS_HEADERS)
 
+# KEX_CODE_QCBITS
+KEX_CODE_QCBITS_SRC := $(wildcard src/kex_code_qcbits/external/*.c)
+KEX_CODE_QCBITS_SRC += $(wildcard src/kex_code_qcbits/*.c)
+KEX_CODE_QCBITS_OBJS := $(patsubst src/%.c, objs/%.o, $(KEX_CODE_QCBITS_SRC))
+KEX_CODE_QCBITS_HEADERS := $(wildcard src/kex_code_qcbits/external/*.h)
+KEX_CODE_QCBITS_HEADERS += $(wildcard src/kex_code_qcbits/*.h)
+$(KEX_CODE_QCBITS_OBJS): $(KEX_CODE_QCBITS_HEADERS)
+
+
 
 # AES
 AES_OBJS := $(addprefix objs/crypto/aes/, aes.o aes_c.o aes_ni.o)
@@ -136,7 +146,7 @@ objs/kex/kex.o: src/kex/kex.h
 
 RAND_OBJS := $(RAND_URANDOM_AESCTR_OBJS) $(RAND_URANDOM_CHACHA_OBJS) objs/crypto/rand/rand.o
 
-KEX_OBJS := $(KEX_RLWE_BCNS15_OBJS) $(KEX_RLWE_NEWHOPE_OBJS) $(KEX_RLWE_MSRLN16_OBJS) $(KEX_LWE_FRODO_OBJS) $(KEX_SIDH_CLN16_OBJS) $(KEX_CODE_MCBITS_OBJS) objs/kex/kex.o
+KEX_OBJS := $(KEX_RLWE_BCNS15_OBJS) $(KEX_RLWE_NEWHOPE_OBJS) $(KEX_RLWE_MSRLN16_OBJS) $(KEX_LWE_FRODO_OBJS) $(KEX_SIDH_CLN16_OBJS) $(KEX_CODE_MCBITS_OBJS) $(KEX_CODE_QCBITS_OBJS) objs/kex/kex.o
 
 lib: $(RAND_OBJS) $(KEX_OBJS) $(AES_OBJS) $(COMMON_OBJS) $(SHA3_OBJS)
 	rm -f liboqs.a
